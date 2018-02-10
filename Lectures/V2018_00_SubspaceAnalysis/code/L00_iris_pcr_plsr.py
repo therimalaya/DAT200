@@ -12,12 +12,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from random import sample
 
 
 
 # Load data and extract information
 #df = pd.read_table("http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data", sep=',')
-df = pd.read_table("iris_data.txt", sep=',')
+df = pd.read_table("../data/iris_data.txt", sep=',')
+df['class'] = df['class'].str.replace('Iris-', '')
+
 classNames = list(df['class'])
 XvarNames = list(df.columns[0:4])
 YvarName = list(df.columns[4:])
@@ -30,16 +33,11 @@ descrStats = df.describe()
 
 
 # Access data specific to each class
-uniqueCl = list(df['class'].unique())
+unique_class = list(df['class'].unique())
 
-data_iseto = df[df['class'] == 'Iris-setosa']
-data_ivers = df[df['class'] == 'Iris-versicolor']
-data_ivirg = df[df['class'] == 'Iris-virginica']
-
-#desSt_iseto = data_iseto.describe()
-#desSt_ivers = data_ivers.describe()
-#desSt_ivirg = data_ivirg.describe()
-
+setosa_df = df[df['class'] == 'setosa']
+versicolor_df = df[df['class'] == 'versicolor']
+virginica_df = df[df['class'] == 'virginica']
 
 #data_iseto.plot.box(title='Iris setosa')
 #data_ivers.plot.box(title='Iris-versicolour')
@@ -61,31 +59,50 @@ sns.pairplot(df, hue='class',
 
 
 # Split data into training and test set
-train_iseto = data_iseto.loc[0:34, :]
-train_ivers = data_ivers.loc[50:84, :]
-train_ivirg = data_ivirg.loc[100:134, :]
-train = pd.concat([train_iseto, train_ivers, train_ivirg])
-trainData = train[XvarNames].values
+def sample_df(df, train_prop):
+  df = df.reset_index(drop=True)
+  len_df = int(len(df))
+  range_df = range(len_df)
+  sample_size = int(np.ceil(len_df * train_prop))
+  mask = df.index.isin(sample(range_df, sample_size))
+  Train = df.iloc[mask]
+  Test = df.iloc[~mask]
+  return Train, Test
 
-test_iseto = data_iseto.loc[35:49, :]
-test_ivers = data_ivers.loc[85:99, :]
-test_ivirg = data_ivirg.loc[135:149, :]
-test = pd.concat([test_iseto, test_ivers, test_ivirg])
-testData = test[XvarNames].values
+setosa_train, setosa_test = sample_df(setosa_df, 0.6)
+versicolor_train, versicolor_test = sample_df(versicolor_df, 0.6)
+virginica_train, virginica_test = sample_df(virginica_df, 0.6)
+
+for name in dir():
+    if name.endswith(('train', 'test', 'idx')):
+        del globals()[name]
+
+train_df = pd.concat([setosa_train, versicolor_train, virginica_train]).reset_index(drop=True)
+test_df = pd.concat([setosa_test, versicolor_test, virginica_test]).reset_index(drop=True)
+
+#train = pd.concat([train_iseto, train_ivers, train_ivirg])
+#trainData = train[XvarNames].values
+#
+#test_iseto = data_iseto.loc[35:49, :]
+#test_ivers = data_ivers.loc[85:99, :]
+#test_ivirg = data_ivirg.loc[135:149, :]
+#test = pd.concat([test_iseto, test_ivers, test_ivirg])
+#testData = test[XvarNames].values
 
 
 # Construct dummy matrix for response (home brew solution)
-dummyY = np.zeros([np.shape(train)[0], 3])
-
-
-for ind, obj in enumerate(train.index):
-    #print('DF index', ind, ' -- DF row lable', train.index[ind], train.iloc[ind]['class'])
-    if train.iloc[ind]['class'] == 'Iris-setosa':
-        dummyY[ind, 0] = 1
-    elif train.iloc[ind]['class'] == 'Iris-versicolor':
-        dummyY[ind, 1] = 1
-    elif train.iloc[ind]['class'] == 'Iris-virginica':
-        dummyY[ind, 2] = 1
+dummyY = pd.get_dummies(train_df['class'])
+#dummyY = np.zeros([np.shape(train)[0], 3])
+#
+#
+#for ind, obj in enumerate(train.index):
+#    #print('DF index', ind, ' -- DF row lable', train.index[ind], train.iloc[ind]['class'])
+#    if train.iloc[ind]['class'] == 'Iris-setosa':
+#        dummyY[ind, 0] = 1
+#    elif train.iloc[ind]['class'] == 'Iris-versicolor':
+#        dummyY[ind, 1] = 1
+#    elif train.iloc[ind]['class'] == 'Iris-virginica':
+#        dummyY[ind, 2] = 1
 
 
 
@@ -93,21 +110,21 @@ for ind, obj in enumerate(train.index):
 # Compute PCR model
 print('PCR **************************************')        
         
-modelPCR = ho.nipalsPCR(arrX=trainData,
+modelPCR = ho.nipalsPCR(arrX=train_df[XvarNames].values,
                      arrY=dummyY, 
                      Xstand=True, Ystand=False,
                      cvType=['loo'])
 
 
 hopl.plot(modelPCR, comp=[1,2], 
-          plots=[1, 2, 3, 4, 6],
-          objNames = list(train['class']),
+          plots=[1, 2, 4, 6],
+          objNames = list(train_df['class']),
           XvarNames = XvarNames,
           YvarNames = ['Setosa', 'Versicolor', 'Virginica'])
 
 hopl.explainedVariance(modelPCR, validated=[True], which=['X'])
 
-predRes = modelPCR.Y_predict(testData , numComp=2)
+predRes = modelPCR.Y_predict(test_df[XvarNames].values , numComp=2)
 
 
 
